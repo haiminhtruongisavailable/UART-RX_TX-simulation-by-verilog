@@ -1,0 +1,90 @@
+module uart_tx
+  #(parameter CLKS_PER_BIT = 87)
+  (
+    input        i_Clock,
+    input        i_Tx_DV,
+    input  [7:0] i_Tx_Byte,
+    output       o_Tx_Active,
+    output reg   o_Tx_Serial,
+    output       o_Tx_Done,
+    output [1:0] state,       // FSM state
+    output [2:0] bit_index,   // Current bit index (0–7)
+    output [7:0] count_value  // Current baud counter
+  );
+
+  // State encoding
+  localparam S_IDLE  = 2'b00,
+             S_START = 2'b01,
+             S_DATA  = 2'b10,
+             S_STOP  = 2'b11;
+
+  reg [1:0]  state_reg = S_IDLE;
+  reg [7:0]  clk_count = 0;  // <-- baud counter
+  reg [2:0]  bit_idx   = 0;  // data bit index
+  reg [7:0]  tx_data   = 0;
+  reg        tx_done   = 0;
+  reg        tx_active = 0;
+
+  always @(posedge i_Clock) begin
+    case (state_reg)
+      S_IDLE: begin
+        o_Tx_Serial <= 1'b1;
+        tx_done     <= 0;
+        clk_count   <= 0;
+        bit_idx     <= 0;
+        if (i_Tx_DV) begin
+          tx_active <= 1;
+          tx_data   <= i_Tx_Byte;
+          state_reg <= S_START;
+        end
+      end
+
+      S_START: begin
+        o_Tx_Serial <= 1'b0;
+        if (clk_count == CLKS_PER_BIT-1) begin
+          clk_count <= 0;
+          state_reg <= S_DATA;
+        end else begin
+          clk_count <= clk_count + 1;
+        end
+      end
+
+      S_DATA: begin
+        o_Tx_Serial <= tx_data[bit_idx]; //w_Tx_Serial in testbench
+        if (clk_count == CLKS_PER_BIT-1) begin
+          clk_count <= 0;
+          if (bit_idx == 7) begin
+            bit_idx   <= 0;
+            state_reg <= S_STOP;
+          end else begin
+            bit_idx <= bit_idx + 1;
+          end
+        end else begin
+          clk_count <= clk_count + 1;
+        end
+      end
+
+      S_STOP: begin
+        o_Tx_Serial <= 1'b1;
+        if (clk_count == CLKS_PER_BIT-1) begin
+          tx_done   <= 1;
+          tx_active <= 0;
+          clk_count <= 0;
+          state_reg <= S_IDLE;
+        end else begin
+          clk_count <= clk_count + 1;
+          tx_done   <= 0;
+        end
+      end
+
+      default: state_reg <= S_IDLE;
+    endcase
+  end
+
+  assign o_Tx_Active = tx_active;
+  assign o_Tx_Done   = tx_done;
+  assign state       = state_reg;
+  assign bit_index   = bit_idx;    // expose index
+  assign count_value = clk_count;  // expose counter
+
+endmodule
