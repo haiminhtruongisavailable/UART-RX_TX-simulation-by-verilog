@@ -147,4 +147,8 @@ endmodule
 		endcase
 	endmodule
 		
+<<<<<<< HEAD
 	
+=======
+	
+>>>>>>> 8655ca9dc5f76c178abcc65bc530a9caf171de86
